@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 
 namespace Umbraco.Core.Sync
 {
@@ -12,14 +13,19 @@ namespace Umbraco.Core.Sync
         /// </summary>
         public DatabaseServerRegistrarOptions()
         {
-            StaleServerTimeout = new TimeSpan(1,0,0); // 1 day
+            StaleServerTimeout = TimeSpan.FromMinutes(2); // 2 minutes
             ThrottleSeconds = 30; // 30 seconds
+            RecurringSeconds = 60; // do it every minute
         }
 
-        /// <summary>
-        /// The number of seconds to wait between each updates to the database.
-        /// </summary>
+        [Obsolete("This is no longer used")]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public int ThrottleSeconds { get; set; }
+
+        /// <summary>
+        /// The amount of seconds to wait between calls to the database on the background thread
+        /// </summary>
+        public int RecurringSeconds { get; set; }
 
         /// <summary>
         /// The time span to wait before considering a server stale, after it has last been accessed.

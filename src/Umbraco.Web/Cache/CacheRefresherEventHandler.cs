@@ -10,6 +10,7 @@ using umbraco.BusinessLogic;
 using umbraco.cms.businesslogic;
 using System.Linq;
 using umbraco.cms.businesslogic.web;
+using Umbraco.Core.Logging;
 using Umbraco.Core.Publishing;
 using Content = Umbraco.Core.Models.Content;
 using ApplicationTree = Umbraco.Core.Models.ApplicationTree;
@@ -23,7 +24,9 @@ namespace Umbraco.Web.Cache
     public class CacheRefresherEventHandler : ApplicationEventHandler
     {
         protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
-        {   
+        {
+            LogHelper.Info<CacheRefresherEventHandler>("Initializing Umbraco internal event handlers for cache refreshing");
+
             //bind to application tree events
             ApplicationTreeService.Deleted += ApplicationTreeDeleted;
             ApplicationTreeService.Updated += ApplicationTreeUpdated;
@@ -122,8 +125,9 @@ namespace Umbraco.Web.Cache
 
             //public access events
             PublicAccessService.Saved += PublicAccessService_Saved;
+            PublicAccessService.Deleted += PublicAccessService_Deleted; ;
         }
-
+        
         #region Publishing
 
         void PublishingStrategy_UnPublished(IPublishingStrategy sender, PublishEventArgs<IContent> e)
@@ -204,6 +208,11 @@ namespace Umbraco.Web.Cache
         #region Public access event handlers
 
         static void PublicAccessService_Saved(IPublicAccessService sender, SaveEventArgs<PublicAccessEntry> e)
+        {
+            DistributedCache.Instance.RefreshPublicAccess();
+        }
+
+        private void PublicAccessService_Deleted(IPublicAccessService sender, DeleteEventArgs<PublicAccessEntry> e)
         {
             DistributedCache.Instance.RefreshPublicAccess();
         }

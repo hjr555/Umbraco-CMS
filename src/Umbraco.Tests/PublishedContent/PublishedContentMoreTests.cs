@@ -139,7 +139,6 @@ namespace Umbraco.Tests.PublishedContent
         }
 
         [Test]
-        [Ignore("Fails as long as PublishedContentModel is internal.")] // fixme
         public void OfType1()
         {
             var content = UmbracoContext.Current.ContentCache.GetAtRoot()
@@ -155,7 +154,6 @@ namespace Umbraco.Tests.PublishedContent
         }
 
         [Test]
-        [Ignore("Fails as long as PublishedContentModel is internal.")] // fixme
         public void OfType2()
         {
             var content = UmbracoContext.Current.ContentCache.GetAtRoot()
@@ -169,7 +167,6 @@ namespace Umbraco.Tests.PublishedContent
         }
 
         [Test]
-        [Ignore("Fails as long as PublishedContentModel is internal.")] // fixme
         public void OfType()
         {
             var content = UmbracoContext.Current.ContentCache.GetAtRoot()
@@ -196,7 +193,6 @@ namespace Umbraco.Tests.PublishedContent
         }
 
         [Test]
-        [Ignore("Fails as long as PublishedContentModel is internal.")] // fixme
         public void Issue()
         {
             var content = UmbracoContext.Current.ContentCache.GetAtRoot()
@@ -218,6 +214,16 @@ namespace Umbraco.Tests.PublishedContent
             Assert.AreEqual(1234, content3.Prop1);
         }
 
+        [Test]
+        public void PublishedContentQueryTypedContentList()
+        {
+            var query = new PublishedContentQuery(UmbracoContext.Current.ContentCache, UmbracoContext.Current.MediaCache);
+            var result = query.TypedContent(new[] { 1, 2, 4 }).ToArray();
+            Assert.AreEqual(2, result.Length);
+            Assert.AreEqual(1, result[0].Id);
+            Assert.AreEqual(2, result[1].Id);
+        }
+
         static SolidPublishedCaches CreatePublishedContent()
         {
             var caches = new SolidPublishedCaches();
@@ -228,9 +234,9 @@ namespace Umbraco.Tests.PublishedContent
                         new PublishedPropertyType("prop1", 1, "?"), 
                     };
 
-            var contentType1 = new PublishedContentType(1, "ContentType1", props);
-            var contentType2 = new PublishedContentType(2, "ContentType2", props);
-            var contentType2s = new PublishedContentType(3, "ContentType2Sub", props);
+            var contentType1 = new PublishedContentType(1, "ContentType1", Enumerable.Empty<string>(), props);
+            var contentType2 = new PublishedContentType(2, "ContentType2", Enumerable.Empty<string>(), props);
+            var contentType2s = new PublishedContentType(3, "ContentType2Sub", Enumerable.Empty<string>(), props);
 
             cache.Add(new SolidPublishedContent(contentType1)
                 {

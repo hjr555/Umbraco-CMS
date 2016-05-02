@@ -1,6 +1,7 @@
 using System;
 using Umbraco.Core.Persistence;
 using Umbraco.Core.Persistence.DatabaseAnnotations;
+using Umbraco.Core.Persistence.DatabaseModelDefinitions;
 
 namespace Umbraco.Core.Models.Rdbms
 {
@@ -10,7 +11,7 @@ namespace Umbraco.Core.Models.Rdbms
     internal class MigrationDto
     {
         [Column("id")]
-        [PrimaryKeyColumn(AutoIncrement = true)]
+        [PrimaryKeyColumn(AutoIncrement = true, IdentitySeed = 100)]
         public int Id { get; set; }
 
         [Column("name")]
@@ -19,7 +20,7 @@ namespace Umbraco.Core.Models.Rdbms
         public string Name { get; set; }
 
         [Column("createDate")]
-        [Constraint(Default = "getdate()")]
+        [Constraint(Default = SystemMethods.CurrentDateTime)]
         public DateTime CreateDate { get; set; }
 
         [Column("version")]

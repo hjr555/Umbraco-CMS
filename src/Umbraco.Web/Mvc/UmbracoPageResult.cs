@@ -34,7 +34,7 @@ namespace Umbraco.Web.Mvc
 
             ValidateRouteData(context.RouteData);
 
-			var routeDef = (RouteDefinition)context.RouteData.DataTokens["umbraco-route-def"];
+			var routeDef = (RouteDefinition)context.RouteData.DataTokens[Umbraco.Core.Constants.Web.UmbracoRouteDefinitionDataToken];
 
             //Special case, if it is webforms but we're posting to an MVC surface controller, then we 
             // need to return the webforms result instead
@@ -91,7 +91,7 @@ namespace Umbraco.Web.Mvc
         /// </summary>
         private static void ValidateRouteData(RouteData routeData)
         {
-            if (routeData.DataTokens.ContainsKey("umbraco-route-def") == false)
+            if (routeData.DataTokens.ContainsKey(Umbraco.Core.Constants.Web.UmbracoRouteDefinitionDataToken) == false)
             {
                 throw new InvalidOperationException("Can only use " + typeof(UmbracoPageResult).Name +
                                                     " in the context of an Http POST when using a SurfaceController form");
@@ -110,7 +110,7 @@ namespace Umbraco.Web.Mvc
             tempDataDictionary.Save(context, new SessionStateTempDataProvider());
             var viewCtx = new ViewContext(context, new DummyView(), new ViewDataDictionary(), tempDataDictionary, new StringWriter());
 
-            viewCtx.ViewData.ModelState.Merge(context.Controller.ViewData.ModelState);
+            viewCtx.ViewData.ModelState.Merge(new ModelStateDictionary(context.Controller.ViewData.ModelState));
 
             foreach (var d in context.Controller.ViewData)
                 viewCtx.ViewData[d.Key] = d.Value;

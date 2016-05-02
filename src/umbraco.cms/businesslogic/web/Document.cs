@@ -17,6 +17,7 @@ using umbraco.BusinessLogic;
 using umbraco.BusinessLogic.Actions;
 using umbraco.cms.helpers;
 using umbraco.DataLayer;
+using Umbraco.Core.Events;
 using Property = umbraco.cms.businesslogic.property.Property;
 using Umbraco.Core.Strings;
 
@@ -392,7 +393,7 @@ namespace umbraco.cms.businesslogic.web
             ApplicationContext.Current.DatabaseContext.Database.Execute(
                 "update cmsDocument set templateId = NULL where templateId = @TemplateId", new {TemplateId = templateId});
             //We need to clear cache for Documents since this is touching the database directly
-            ApplicationContext.Current.ApplicationCache.RuntimeCache.ClearCacheObjectTypes<IContent>();
+            ApplicationContext.Current.ApplicationCache.IsolatedRuntimeCache.ClearCache<IContent>();
         }
 
         /// <summary>
@@ -472,7 +473,7 @@ namespace umbraco.cms.businesslogic.web
         #endregion
 
         #region Public Properties
-
+        
         public override int sortOrder
         {
             get
@@ -513,10 +514,7 @@ namespace umbraco.cms.businesslogic.web
 
         public override int ParentId
         {
-            get
-            {
-                return ContentEntity == null ? base.ParentId : ContentEntity.ParentId;
-            }
+            get { return ContentEntity == null ? base.ParentId : ContentEntity.ParentId; }
         }
 
         public override string Path
@@ -894,7 +892,7 @@ namespace umbraco.cms.businesslogic.web
         [Obsolete("Don't use! Only used internally to support the legacy events", false)]
         internal Attempt<PublishStatus> SaveAndPublish(int userId)
         {
-            var result = Attempt.Fail(new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent));
+            var result = Attempt.Fail(new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent, new EventMessages()));
             foreach (var property in GenericProperties)
             {
                 ContentEntity.SetValue(property.PropertyType.Alias, property.Value);
@@ -1019,10 +1017,10 @@ namespace umbraco.cms.businesslogic.web
                     return result;
                 }
 
-                return new Attempt<PublishStatus>(false, new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent));
+                return new Attempt<PublishStatus>(false, new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent, new EventMessages()));
             }
 
-            return new Attempt<PublishStatus>(false, new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent));
+            return new Attempt<PublishStatus>(false, new PublishStatus(ContentEntity, PublishStatusType.FailedCancelledByEvent, new EventMessages()));
         }
 
         /// <summary>
@@ -1287,9 +1285,10 @@ namespace umbraco.cms.businesslogic.web
 
             // attributes
             x.Attributes.Append(addAttribute(xd, "id", Id.ToString()));
+            x.Attributes.Append(addAttribute(xd, "key", UniqueId.ToString()));
             //            x.Attributes.Append(addAttribute(xd, "version", Version.ToString()));
             if (Level > 1)
-                x.Attributes.Append(addAttribute(xd, "parentID", Parent.Id.ToString()));
+                x.Attributes.Append(addAttribute(xd, "parentID", ParentId.ToString()));
             else
                 x.Attributes.Append(addAttribute(xd, "parentID", "-1"));
             x.Attributes.Append(addAttribute(xd, "level", Level.ToString()));

@@ -32,10 +32,21 @@ namespace Umbraco.Web.Scheduling
         {            
             if (_appContext == null) return true; // repeat...
 
-            if (ServerEnvironmentHelper.GetStatus(_settings) == CurrentServerEnvironmentStatus.Slave)
+            switch (_appContext.GetCurrentServerRole())
             {
-                LogHelper.Debug<ScheduledPublishing>("Does not run on slave servers.");
-                return false; // do NOT repeat, server status comes from config and will NOT change
+                case ServerRole.Slave:
+                    LogHelper.Debug<ScheduledPublishing>("Does not run on slave servers.");
+                    return true; // DO repeat, server role can change
+                case ServerRole.Unknown:
+                    LogHelper.Debug<ScheduledPublishing>("Does not run on servers with unknown role.");
+                    return true; // DO repeat, server role can change
+            }
+
+            // ensure we do not run if not main domain, but do NOT lock it
+            if (_appContext.MainDom.IsMainDom == false)
+            {
+                LogHelper.Debug<ScheduledPublishing>("Does not run if not MainDom.");
+                return false; // do NOT repeat, going down
             }
 
             using (DisposableTimer.DebugDuration<ScheduledPublishing>(() => "Scheduled publishing executing", () => "Scheduled publishing complete"))
@@ -54,10 +65,8 @@ namespace Umbraco.Web.Scheduling
                     var url = umbracoAppUrl + "/RestServices/ScheduledPublish/Index";
                     using (var wc = new HttpClient())
                     {
-                        var request = new HttpRequestMessage()
+                        var request = new HttpRequestMessage(HttpMethod.Post, url)
                         {
-                            RequestUri = new Uri(url),
-                            Method = HttpMethod.Post,
                             Content = new StringContent(string.Empty)
                         };
                         //pass custom the authorization header

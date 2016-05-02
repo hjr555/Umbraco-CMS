@@ -84,6 +84,11 @@ namespace Umbraco.Web.Routing
 			//   so that they point to a non-existing page eg /redirect-404.aspx
 			//   TODO: SD: We need more information on this for when we release 4.10.0 as I'm not sure what this means.
 
+            // trigger the Preparing event - at that point anything can still be changed
+            // the idea is that it is possible to change the uri
+            //
+		    _pcr.OnPreparing();
+
 			//find domain
 			FindDomain();
 
@@ -242,27 +247,27 @@ namespace Umbraco.Web.Routing
             var domainAndUri = DomainHelper.DomainForUri(Services.DomainService.GetAll(false), _pcr.Uri);
 
 			// handle domain
-			if (domainAndUri != null)
+			if (domainAndUri != null && domainAndUri.UmbracoDomain.LanguageIsoCode.IsNullOrWhiteSpace() == false)
 			{
-				// matching an existing domain
-				ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Matches domain=\"{1}\", rootId={2}, culture=\"{3}\"",
-												 () => tracePrefix,
-												 () => domainAndUri.UmbracoDomain.DomainName,
-												 () => domainAndUri.UmbracoDomain.RootContent.Id,
-                                                 () => domainAndUri.UmbracoDomain.Language.IsoCode);
+                // matching an existing domain
+                ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Matches domain=\"{1}\", rootId={2}, culture=\"{3}\"",
+                    () => tracePrefix,
+                    () => domainAndUri.UmbracoDomain.DomainName,
+                    () => domainAndUri.UmbracoDomain.RootContentId,
+                    () => domainAndUri.UmbracoDomain.LanguageIsoCode);
 
                 _pcr.UmbracoDomain = domainAndUri.UmbracoDomain;
-				_pcr.DomainUri = domainAndUri.Uri;
-                _pcr.Culture = new CultureInfo(domainAndUri.UmbracoDomain.Language.IsoCode);
+                _pcr.DomainUri = domainAndUri.Uri;
+                _pcr.Culture = new CultureInfo(domainAndUri.UmbracoDomain.LanguageIsoCode);
 
-				// canonical? not implemented at the moment
-				// if (...)
-				// {
-				//  _pcr.RedirectUrl = "...";
-				//  return true;
-				// }
-			}
-			else
+                // canonical? not implemented at the moment
+                // if (...)
+                // {
+                //  _pcr.RedirectUrl = "...";
+                //  return true;
+                // }
+            }
+            else
 			{
 				// not matching any existing domain
 				ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Matches no domain", () => tracePrefix);
@@ -288,15 +293,15 @@ namespace Umbraco.Web.Routing
 
 			var nodePath = _pcr.PublishedContent.Path;
 			ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Path=\"{1}\"", () => tracePrefix, () => nodePath);
-            var rootNodeId = _pcr.HasDomain ? _pcr.UmbracoDomain.RootContent.Id : (int?)null;
+            var rootNodeId = _pcr.HasDomain ? _pcr.UmbracoDomain.RootContentId : (int?)null;
             var domain = DomainHelper.FindWildcardDomainInPath(Services.DomainService.GetAll(true), nodePath, rootNodeId);
 
-			if (domain != null)
+			if (domain != null && domain.LanguageIsoCode.IsNullOrWhiteSpace() == false)
 			{
-				_pcr.Culture = new CultureInfo(domain.Language.IsoCode);
-				ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Got domain on node {1}, set culture to \"{2}\".", () => tracePrefix,
-                    () => domain.RootContent.Id, () => _pcr.Culture.Name);
-			}
+                _pcr.Culture = new CultureInfo(domain.LanguageIsoCode);
+                ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Got domain on node {1}, set culture to \"{2}\".", () => tracePrefix,
+                    () => domain.RootContentId, () => _pcr.Culture.Name);
+            }
 			else
 			{
 				ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}No match.", () => tracePrefix);
@@ -515,11 +520,11 @@ namespace Umbraco.Web.Routing
 				{
 					// redirect to another page
                     var node = _routingContext.UmbracoContext.ContentCache.GetById(internalRedirectId);
-
-                    _pcr.SetInternalRedirectPublishedContent(node); // don't use .PublishedContent here
+                    
                     if (node != null)
 					{
-						redirect = true;
+                        _pcr.SetInternalRedirectPublishedContent(node); // don't use .PublishedContent here
+                        redirect = true;
 						ProfilingLogger.Logger.Debug<PublishedContentRequestEngine>("{0}Redirecting to id={1}", () => tracePrefix, () => internalRedirectId);
 					}
 					else

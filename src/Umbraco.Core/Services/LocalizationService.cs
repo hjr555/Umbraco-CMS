@@ -18,26 +18,10 @@ namespace Umbraco.Core.Services
     /// </summary>
     public class LocalizationService : RepositoryService, ILocalizationService
     {
+        
 
-        [Obsolete("Use the constructors that specify all dependencies instead")]
-        public LocalizationService()
-            : this(new RepositoryFactory(ApplicationContext.Current.ApplicationCache, LoggerResolver.Current.Logger, SqlSyntaxContext.SqlSyntaxProvider, UmbracoConfig.For.UmbracoSettings()))
-        { }
-
-        [Obsolete("Use the constructors that specify all dependencies instead")]
-        public LocalizationService(RepositoryFactory repositoryFactory)
-            : this(new PetaPocoUnitOfWorkProvider(LoggerResolver.Current.Logger), repositoryFactory, LoggerResolver.Current.Logger)
-        {
-        }
-
-        [Obsolete("Use the constructors that specify all dependencies instead")]
-        public LocalizationService(IDatabaseUnitOfWorkProvider provider)
-            : this(provider, new RepositoryFactory(ApplicationContext.Current.ApplicationCache, LoggerResolver.Current.Logger, SqlSyntaxContext.SqlSyntaxProvider, UmbracoConfig.For.UmbracoSettings()), LoggerResolver.Current.Logger)
-        {
-        }
-
-        public LocalizationService(IDatabaseUnitOfWorkProvider provider, RepositoryFactory repositoryFactory, ILogger logger)
-            : base(provider, repositoryFactory, logger)
+        public LocalizationService(IDatabaseUnitOfWorkProvider provider, RepositoryFactory repositoryFactory, ILogger logger, IEventMessagesFactory eventMessagesFactory)
+            : base(provider, repositoryFactory, logger, eventMessagesFactory)
         {
         }
 
@@ -110,6 +94,9 @@ namespace Umbraco.Core.Services
                 repository.AddOrUpdate(item);
                 uow.Commit();
 
+                //ensure the lazy Language callback is assigned
+                EnsureDictionaryItemLanguageCallback(item);
+
                 SavedDictionaryItem.RaiseEvent(new SaveEventArgs<IDictionaryItem>(item), this);
 
                 return item;
@@ -125,7 +112,10 @@ namespace Umbraco.Core.Services
         {
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
-                return repository.Get(id);
+                var item = repository.Get(id);
+                //ensure the lazy Language callback is assigned
+                EnsureDictionaryItemLanguageCallback(item);
+                return item;
             }
         }
 
@@ -138,11 +128,10 @@ namespace Umbraco.Core.Services
         {
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
-                return repository.Get(id);
-                //var query = Query<IDictionaryItem>.Builder.Where(x => x.Key == id);
-                //var items = repository.GetByQuery(query);
-
-                //return items.FirstOrDefault();
+                var item = repository.Get(id);
+                //ensure the lazy Language callback is assigned
+                EnsureDictionaryItemLanguageCallback(item);
+                return item;
             }
         }
 
@@ -155,11 +144,10 @@ namespace Umbraco.Core.Services
         {
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
-                return repository.Get(key);
-                //var query = Query<IDictionaryItem>.Builder.Where(x => x.ItemKey == key);
-                //var items = repository.GetByQuery(query);
-
-                //return items.FirstOrDefault();
+                var item = repository.Get(key);
+                //ensure the lazy Language callback is assigned
+                EnsureDictionaryItemLanguageCallback(item);
+                return item;
             }
         }
 
@@ -173,8 +161,25 @@ namespace Umbraco.Core.Services
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
                 var query = Query<IDictionaryItem>.Builder.Where(x => x.ParentId == parentId);
-                var items = repository.GetByQuery(query);
+                var items = repository.GetByQuery(query).ToArray();
+                //ensure the lazy Language callback is assigned
+                items.ForEach(EnsureDictionaryItemLanguageCallback);
+                return items;
+            }
+        }
 
+        /// <summary>
+        /// Gets a list of descendants for a <see cref="IDictionaryItem"/>
+        /// </summary>
+        /// <param name="parentId">Id of the parent, null will return all dictionary items</param>
+        /// <returns>An enumerable list of <see cref="IDictionaryItem"/> objects</returns>
+        public IEnumerable<IDictionaryItem> GetDictionaryItemDescendants(Guid? parentId)
+        {
+            using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
+            {
+                var items = repository.GetDictionaryItemDescendants(parentId).ToArray();
+                //ensure the lazy Language callback is assigned
+                items.ForEach(EnsureDictionaryItemLanguageCallback);
                 return items;
             }
         }
@@ -188,8 +193,9 @@ namespace Umbraco.Core.Services
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
                 var query = Query<IDictionaryItem>.Builder.Where(x => x.ParentId == null);
-                var items = repository.GetByQuery(query);
-
+                var items = repository.GetByQuery(query).ToArray();
+                //ensure the lazy Language callback is assigned
+                items.ForEach(EnsureDictionaryItemLanguageCallback);
                 return items;
             }
         }
@@ -204,10 +210,6 @@ namespace Umbraco.Core.Services
             using (var repository = RepositoryFactory.CreateDictionaryRepository(UowProvider.GetUnitOfWork()))
             {
                 return repository.Get(key) != null;
-                //var query = Query<IDictionaryItem>.Builder.Where(x => x.ItemKey == key);
-                //var items = repository.GetByQuery(query);
-
-                //return items.Any();
             }
         }
 
@@ -226,6 +228,8 @@ namespace Umbraco.Core.Services
             {
                 repository.AddOrUpdate(dictionaryItem);
                 uow.Commit();
+                //ensure the lazy Language callback is assigned
+                EnsureDictionaryItemLanguageCallback(dictionaryItem);
             }
 
             SavedDictionaryItem.RaiseEvent(new SaveEventArgs<IDictionaryItem>(dictionaryItem, false), this);
@@ -280,10 +284,6 @@ namespace Umbraco.Core.Services
             using (var repository = RepositoryFactory.CreateLanguageRepository(UowProvider.GetUnitOfWork()))
             {
                 return repository.GetByCultureName(cultureName);
-                //var query = Query<ILanguage>.Builder.Where(x => x.CultureName == cultureName);
-                //var items = repository.GetByQuery(query);
-
-                //return items.FirstOrDefault();
             }
         }
 
@@ -297,10 +297,6 @@ namespace Umbraco.Core.Services
             using (var repository = RepositoryFactory.CreateLanguageRepository(UowProvider.GetUnitOfWork()))
             {
                 return repository.GetByIsoCode(isoCode);
-                //var query = Query<ILanguage>.Builder.Where(x => x.IsoCode == isoCode);
-                //var items = repository.GetByQuery(query);
-
-                //return items.FirstOrDefault();
             }
         }
 
@@ -369,6 +365,24 @@ namespace Umbraco.Core.Services
             {
                 auditRepo.AddOrUpdate(new AuditItem(objectId, message, type, userId));
                 uow.Commit();
+            }
+        }
+
+        /// <summary>
+        /// This is here to take care of a hack - the DictionaryTranslation model contains an ILanguage reference which we don't want but 
+        /// we cannot remove it because it would be a large breaking change, so we need to make sure it's resolved lazily. This is because
+        /// if developers have a lot of dictionary items and translations, the caching and cloning size gets much much larger because of 
+        /// the large object graphs. So now we don't cache or clone the attached ILanguage
+        /// </summary>
+        private void EnsureDictionaryItemLanguageCallback(IDictionaryItem d)
+        {
+            var item = d as DictionaryItem;
+            if (item == null) return;
+
+            item.GetLanguage = GetLanguageById;
+            foreach (var trans in item.Translations.OfType<DictionaryTranslation>())
+            {
+                trans.GetLanguage = GetLanguageById;
             }
         }
 

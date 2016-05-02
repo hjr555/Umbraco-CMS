@@ -29,11 +29,18 @@ namespace Umbraco.Web.Scheduling
         {
             if (_appContext == null) return true; // repeat...
 
-            string umbracoAppUrl = null;
-
-            try
+            // ensure we do not run if not main domain, but do NOT lock it
+            if (_appContext.MainDom.IsMainDom == false)
             {
-                using (DisposableTimer.DebugDuration<KeepAlive>(() => "Keep alive executing", () => "Keep alive complete"))
+                LogHelper.Debug<KeepAlive>("Does not run if not MainDom.");
+                return false; // do NOT repeat, going down
+            }
+
+            using (DisposableTimer.DebugDuration<KeepAlive>(() => "Keep alive executing", () => "Keep alive complete"))
+            {
+                string umbracoAppUrl = null;
+
+                try
                 {
                     umbracoAppUrl = _appContext.UmbracoApplicationUrl;
                     if (umbracoAppUrl.IsNullOrWhiteSpace())
@@ -45,19 +52,14 @@ namespace Umbraco.Web.Scheduling
                     var url = umbracoAppUrl + "/ping.aspx";
                     using (var wc = new HttpClient())
                     {
-                        var request = new HttpRequestMessage()
-                        {
-                            RequestUri = new Uri(url),
-                            Method = HttpMethod.Get
-                        };
-
+                        var request = new HttpRequestMessage(HttpMethod.Get, url);
                         var result = await wc.SendAsync(request, token);
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                LogHelper.Error<KeepAlive>(string.Format("Failed (at \"{0}\").", umbracoAppUrl), e);
+                catch (Exception e)
+                {
+                    LogHelper.Error<KeepAlive>(string.Format("Failed (at \"{0}\").", umbracoAppUrl), e);
+                }
             }
 
             return true; // repeat

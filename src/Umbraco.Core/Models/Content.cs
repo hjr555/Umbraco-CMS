@@ -95,13 +95,7 @@ namespace Umbraco.Core.Models
         [DataMember]
         public virtual ITemplate Template
         {
-            get
-            {
-                if (_template == null)
-                    return _contentType.DefaultTemplate;
-
-                return _template;
-            }
+            get { return _template; }
             set
             {
                 SetPropertyValueAndDetectChanges(o =>
@@ -346,18 +340,6 @@ namespace Umbraco.Core.Models
             }
         }
         
-        /// <summary>
-        /// Method to call when Entity is being saved
-        /// </summary>
-        /// <remarks>Created date is set and a Unique key is assigned</remarks>
-        internal override void AddingEntity()
-        {
-            base.AddingEntity();
-
-            if(Key == Guid.Empty)
-                Key = Guid.NewGuid();
-        }
-
         /// <summary>
         /// Method to call when Entity is being updated
         /// </summary>

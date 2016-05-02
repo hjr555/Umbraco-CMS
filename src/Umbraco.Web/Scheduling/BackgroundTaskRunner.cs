@@ -96,7 +96,8 @@ namespace Umbraco.Web.Scheduling
             _logPrefix = "[" + name + "] ";
             _logger = logger;
 
-            HostingEnvironment.RegisterObject(this);
+            if (options.Hosted)
+                HostingEnvironment.RegisterObject(this);
 
             if (options.AutoStart)
                 StartUp();
@@ -216,7 +217,11 @@ namespace Umbraco.Web.Scheduling
         {
             lock (_locker)
             {
-                if (_isCompleted) return false;
+                if (_isCompleted)
+                {
+                    _logger.Debug<BackgroundTaskRunner>(_logPrefix + "Task cannot be added {0}, the task runner is already shutdown", task.GetType);
+                    return false;
+                }
 
                 // add task
                 _logger.Debug<BackgroundTaskRunner>(_logPrefix + "Task added {0}", task.GetType);

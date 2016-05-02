@@ -1,6 +1,7 @@
 ﻿using System;
 using Umbraco.Core.Persistence;
 using Umbraco.Core.Persistence.DatabaseAnnotations;
+using Umbraco.Core.Persistence.DatabaseModelDefinitions;
 
 namespace Umbraco.Core.Models.Rdbms
 {
@@ -9,12 +10,6 @@ namespace Umbraco.Core.Models.Rdbms
     [ExplicitColumns]
     internal class NodeDto
     {
-        public NodeDto()
-        {
-            //By default, always generate a new guid
-            UniqueId = Guid.NewGuid();
-        }
-
         public const int NodeIdSeed = 1050;
 
         [Column("id")]
@@ -48,7 +43,7 @@ namespace Umbraco.Core.Models.Rdbms
         [Column("uniqueID")]
         [NullSetting(NullSetting = NullSettings.NotNull)]
         [Index(IndexTypes.UniqueNonClustered, Name = "IX_umbracoNodeUniqueID")]
-        [Constraint(Default = "newid()")]
+        [Constraint(Default = SystemMethods.NewGuid)]
         public Guid UniqueId { get; set; }
 
         [Column("text")]
@@ -61,7 +56,7 @@ namespace Umbraco.Core.Models.Rdbms
         public Guid? NodeObjectType { get; set; }
 
         [Column("createDate")]
-        [Constraint(Default = "getdate()")]
+        [Constraint(Default = SystemMethods.CurrentDateTime)]
         public DateTime CreateDate { get; set; }
     }
 }

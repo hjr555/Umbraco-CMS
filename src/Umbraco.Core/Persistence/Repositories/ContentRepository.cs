@@ -105,6 +105,7 @@ namespace Umbraco.Core.Persistence.Repositories
 
         #region Overrides of PetaPocoRepositoryBase<IContent>
 
+
         protected override Sql GetBaseQuery(bool isCount)
         {
             var sqlx = string.Format("LEFT OUTER JOIN {0} {1} ON ({1}.{2}={0}.{2} AND {1}.{3}=1)",
@@ -155,8 +156,8 @@ namespace Umbraco.Core.Persistence.Repositories
                                "DELETE FROM cmsContentVersion WHERE ContentId = @Id",
                                "DELETE FROM cmsContentXml WHERE nodeId = @Id",
                                "DELETE FROM cmsContent WHERE nodeId = @Id",
-                               "DELETE FROM umbracoNode WHERE id = @Id",
-                               "DELETE FROM umbracoAccess WHERE nodeId = @Id"
+                               "DELETE FROM umbracoAccess WHERE nodeId = @Id",
+                               "DELETE FROM umbracoNode WHERE id = @Id"
                            };
             return list;
         }
@@ -234,7 +235,14 @@ namespace Umbraco.Core.Persistence.Repositories
             var processed = 0;
             do
             {
-                var descendants = GetPagedResultsByQuery(query, pageIndex, pageSize, out total, "Path", Direction.Ascending);
+                //NOTE: This is an important call, we cannot simply make a call to:
+                //  GetPagedResultsByQuery(query, pageIndex, pageSize, out total, "Path", Direction.Ascending);
+                // because that method is used to query 'latest' content items where in this case we don't necessarily
+                // want latest content items because a pulished content item might not actually be the latest.
+                // see: http://issues.umbraco.org/issue/U4-6322 & http://issues.umbraco.org/issue/U4-5982
+                var descendants = GetPagedResultsByQuery<DocumentDto, Content>(query, pageIndex, pageSize, out total,
+                    new Tuple<string, string>("cmsDocument", "nodeId"),
+                    ProcessQuery, "Path", Direction.Ascending, true);
 
                 var xmlItems = (from descendant in descendants
                                 let xml = serializer(descendant)
@@ -339,6 +347,12 @@ namespace Umbraco.Core.Persistence.Repositories
         protected override void PersistNewItem(IContent entity)
         {
             ((Content)entity).AddingEntity();
+
+            //ensure the default template is assigned
+            if (entity.Template == null)
+            {
+                entity.Template = entity.ContentType.DefaultTemplate;
+            }
 
             //Ensure unique name on the same level
             entity.Name = EnsureUniqueNodeName(entity.ParentId, entity.Name);
@@ -648,8 +662,8 @@ namespace Umbraco.Core.Persistence.Repositories
             var translator = new SqlTranslator<IContent>(sqlClause, query);
             var sql = translator.Translate()
                                 .Where<DocumentDto>(x => x.Published)
-                                .OrderBy<NodeDto>(x => x.Level)
-                                .OrderBy<NodeDto>(x => x.SortOrder);
+                                .OrderBy<NodeDto>(x => x.Level, SqlSyntax)
+                                .OrderBy<NodeDto>(x => x.SortOrder, SqlSyntax);
 
             //NOTE: This doesn't allow properties to be part of the query
             var dtos = Database.Fetch<DocumentDto, ContentVersionDto, ContentDto, NodeDto, DocumentPublishedReadOnlyDto>(sql);
@@ -676,8 +690,7 @@ namespace Umbraco.Core.Persistence.Repositories
         public int CountPublished()
         {
             var sql = GetBaseQuery(true).Where<NodeDto>(x => x.Trashed == false)
-                .Where<DocumentDto>(x => x.Published == true)
-                .Where<DocumentDto>(x => x.Newest == true);
+                .Where<DocumentDto>(x => x.Published == true);
             return Database.ExecuteScalar<int>(sql);
         }
 
@@ -722,7 +735,7 @@ namespace Umbraco.Core.Persistence.Repositories
         /// <param name="content"></param>
         /// <param name="xml"></param>
         public void AddOrUpdateContentXml(IContent content, Func<IContent, XElement> xml)
-        {           
+        {
             _contentXmlRepository.AddOrUpdate(new ContentXmlEntity<IContent>(content, xml));
         }
 
@@ -754,10 +767,11 @@ namespace Umbraco.Core.Persistence.Repositories
         /// <param name="totalRecords">Total records query would return without paging</param>
         /// <param name="orderBy">Field to order by</param>
         /// <param name="orderDirection">Direction to order by</param>
+        /// <param name="orderBySystemField">Flag to indicate when ordering by system field</param>
         /// <param name="filter">Search text filter</param>
         /// <returns>An Enumerable list of <see cref="IContent"/> objects</returns>
         public IEnumerable<IContent> GetPagedResultsByQuery(IQuery<IContent> query, long pageIndex, int pageSize, out long totalRecords,
-            string orderBy, Direction orderDirection, string filter = "")
+            string orderBy, Direction orderDirection, bool orderBySystemField, string filter = "")
         {
 
             //NOTE: This uses the GetBaseQuery method but that does not take into account the required 'newest' field which is 
@@ -776,7 +790,7 @@ namespace Umbraco.Core.Persistence.Repositories
 
             return GetPagedResultsByQuery<DocumentDto, Content>(query, pageIndex, pageSize, out totalRecords,
                 new Tuple<string, string>("cmsDocument", "nodeId"),
-                ProcessQuery, orderBy, orderDirection,
+                ProcessQuery, orderBy, orderDirection, orderBySystemField,
                 filterCallback);
 
         }
@@ -820,12 +834,13 @@ namespace Umbraco.Core.Persistence.Repositories
             var contentTypes = _contentTypeRepository.GetAll(dtos.Select(x => x.ContentVersionDto.ContentDto.ContentTypeId).ToArray())
                 .ToArray();
 
+
+            var ids = dtos
+                .Where(dto => dto.TemplateId.HasValue && dto.TemplateId.Value > 0)
+                .Select(x => x.TemplateId.Value).ToArray();
+
             //NOTE: This should be ok for an SQL 'IN' statement, there shouldn't be an insane amount of content types
-            var templates = _templateRepository.GetAll(
-                dtos
-                    .Where(dto => dto.TemplateId.HasValue && dto.TemplateId.Value > 0)
-                    .Select(x => x.TemplateId.Value).ToArray())
-                .ToArray();
+            var templates = ids.Length == 0 ? Enumerable.Empty<ITemplate>() : _templateRepository.GetAll(ids).ToArray();
 
             var dtosWithContentTypes = dtos
                 //This select into and null check are required because we don't have a foreign damn key on the contentType column
@@ -854,7 +869,7 @@ namespace Umbraco.Core.Persistence.Repositories
         /// <summary>
         /// Private method to create a content object from a DocumentDto, which is used by Get and GetByVersion.
         /// </summary>
-        /// <param name="d"></param>
+        /// <param name="dto"></param>
         /// <param name="contentType"></param>
         /// <param name="template"></param>
         /// <param name="propCollection"></param>
@@ -872,6 +887,11 @@ namespace Umbraco.Core.Persistence.Repositories
             {
                 content.Template = template ?? _templateRepository.Get(dto.TemplateId.Value);
             }
+            else
+            {
+                //ensure there isn't one set.
+                content.Template = null;
+            }
 
             content.Properties = propCollection;
 
@@ -884,7 +904,7 @@ namespace Umbraco.Core.Persistence.Repositories
         /// <summary>
         /// Private method to create a content object from a DocumentDto, which is used by Get and GetByVersion.
         /// </summary>
-        /// <param name="d"></param>
+        /// <param name="dto"></param>
         /// <param name="versionId"></param>
         /// <param name="docSql"></param>
         /// <returns></returns>

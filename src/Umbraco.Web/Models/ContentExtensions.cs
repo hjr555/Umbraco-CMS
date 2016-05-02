@@ -78,15 +78,14 @@ namespace Umbraco.Web.Models
                 domain = pos == 0
                     ? null
                     : domainHelper.DomainForNode(int.Parse(route.Substring(0, pos)), current).UmbracoDomain;
-              }
+            }
 
-            if (domain == null)
-                return GetDefaultCulture(localizationService);
+            var rootContentId = domain == null ? -1 : domain.RootContentId;
+            var wcDomain = DomainHelper.FindWildcardDomainInPath(domainService.GetAll(true), contentPath, rootContentId);
 
-            var wcDomain = DomainHelper.FindWildcardDomainInPath(domainService.GetAll(true), contentPath, domain.RootContent.Id);
-            return wcDomain == null
-                ? new CultureInfo(domain.Language.IsoCode)
-                : new CultureInfo(wcDomain.Language.IsoCode);
+            if (wcDomain != null) return new CultureInfo(wcDomain.LanguageIsoCode);
+            if (domain != null) return new CultureInfo(domain.LanguageIsoCode);
+            return GetDefaultCulture(localizationService);
         }
 
         private static CultureInfo GetDefaultCulture(ILocalizationService localizationService)
